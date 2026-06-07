@@ -13,7 +13,7 @@ import dev.isxander.controlify.screenop.keyboard.KeyboardWidget;
 import dev.isxander.controlify.utils.LazyComponentDims;
 import dev.isxander.controlify.utils.PrecomputedComponentDims;
 import dev.isxander.controlify.virtualmouse.VirtualMouseHandler;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
 import net.minecraft.network.chat.CommonComponents;
@@ -54,15 +54,15 @@ public class AbstractSignEditScreenProcessor extends ScreenProcessor<AbstractSig
     protected void handleButtons(ControllerEntity controller) {
         super.handleButtons(controller);
 
-        var config = controller.genericConfig().config();
+        var config = controller.settings().generic;
 
         // move cursor down a line
         if (ControlifyBindings.GUI_SECONDARY_NAVI_DOWN.on(controller).justPressed()) {
             this.moveCursorFunc.accept(1);
 
-            if (config.hintKeyboardSignLine && config.showScreenGuides) {
-                config.hintKeyboardSignLine = false;
-                Controlify.instance().config().save();
+            if (config.keyboard.hintSignLine && config.guide.showScreenGuides) {
+                config.keyboard.hintSignLine = false;
+                Controlify.instance().config().saveSafely();
             }
 
             playFocusChangeSound();
@@ -72,9 +72,9 @@ public class AbstractSignEditScreenProcessor extends ScreenProcessor<AbstractSig
         if (ControlifyBindings.GUI_SECONDARY_NAVI_UP.on(controller).justPressed()) {
             this.moveCursorFunc.accept(-1);
 
-            if (config.hintKeyboardSignLine && config.showScreenGuides) {
-                config.hintKeyboardSignLine = false;
-                Controlify.instance().config().save();
+            if (config.keyboard.hintSignLine && config.guide.showScreenGuides) {
+                config.keyboard.hintSignLine = false;
+                Controlify.instance().config().saveSafely();
             }
 
             playFocusChangeSound();
@@ -82,27 +82,27 @@ public class AbstractSignEditScreenProcessor extends ScreenProcessor<AbstractSig
     }
 
     @Override
-    protected void render(ControllerEntity controller, GuiGraphics graphics, float tickDelta, Optional<VirtualMouseHandler> vmouse) {
-        var config = controller.genericConfig().config();
+    protected void render(ControllerEntity controller, GuiGraphicsExtractor graphics, float tickDelta, Optional<VirtualMouseHandler> vmouse) {
+        var config = controller.settings().generic;
         KeyboardWidget keyboardWidget = this.keyboardWidgetSupplier.get();
-        if (keyboardWidget != null && config.showScreenGuides) {
-            if (config.hintKeyboardCursor) {
+        if (keyboardWidget != null && config.guide.showScreenGuides) {
+            if (config.keyboard.hintCursor) {
                 LazyComponentDims hint = CommonKeyboardHints.TEXT_CURSOR;
 
                 int x = keyboardWidget.getRight() - hint.getWidth() - 2;
                 int y = keyboardWidget.getY() - hint.getHeight();
 
-                graphics.drawString(minecraft.font, hint.getComponent(), x, y, 0xFFFFFFFF, true);
+                graphics.text(minecraft.font, hint.getComponent(), x, y, 0xFFFFFFFF, true);
             }
 
-            if (config.hintKeyboardSignLine && this.signLineHintLines != null) {
+            if (config.keyboard.hintSignLine && this.signLineHintLines != null) {
                 int y = 4;
                 for (PrecomputedComponentDims<FormattedCharSequence> line : this.signLineHintLines) {
                     int lineWidth = line.width();
                     int lineHeight = line.height();
                     FormattedCharSequence lineText = line.component();
 
-                    graphics.drawString(minecraft.font, lineText, this.screen.width - 1 - lineWidth, y, 0xFFFFFFFF, true);
+                    graphics.text(minecraft.font, lineText, this.screen.width - 1 - lineWidth, y, 0xFFFFFFFF, true);
 
                     y += minecraft.font.lineHeight;
                 }
@@ -111,17 +111,12 @@ public class AbstractSignEditScreenProcessor extends ScreenProcessor<AbstractSig
     }
 
     @Override
-    protected void setInitialFocus() {
-        if (Controlify.instance().currentInputMode() == InputMode.MIXED) {
-            holdRepeatHelper.clearDelay();
-        } else {
-            super.setInitialFocus();
-        }
-    }
-
-    @Override
     public void onWidgetRebuild() {
         super.onWidgetRebuild();
+
+        if (Controlify.instance().currentInputMode() == InputMode.MIXED) {
+            holdRepeatHelper.clearDelay();
+        }
 
         getWidget(CommonComponents.GUI_DONE).ifPresent(doneButton ->
                 ButtonGuideApi.addGuideToButton(

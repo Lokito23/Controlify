@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(SelectWorldScreen.class)
 public interface SelectWorldScreenAccessor {
     @Accessor
-    Button getSelectButton();
+    Button getPlayWorldButton();
 
     @Accessor
     WorldSelectionList getList();

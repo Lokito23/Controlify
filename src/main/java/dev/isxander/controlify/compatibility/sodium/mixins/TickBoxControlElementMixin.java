@@ -10,7 +10,8 @@ import org.spongepowered.asm.mixin.Unique;
 
 @Mixin(targets = "net.caffeinemc.mods.sodium.client.gui.options.control.TickBoxControl$TickBoxControlElement")
 public abstract class TickBoxControlElementMixin implements ComponentProcessorProvider {
-    @Shadow public abstract void toggleControl();
+    @Shadow
+    protected abstract void toggleControl();
 
     @Unique private final ComponentProcessor controlify$componentProcessor
             = new TickBoxControlProcessor(this::toggleControl);

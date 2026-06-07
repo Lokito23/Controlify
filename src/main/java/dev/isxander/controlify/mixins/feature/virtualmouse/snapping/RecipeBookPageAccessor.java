@@ -1,6 +1,6 @@
 package dev.isxander.controlify.mixins.feature.virtualmouse.snapping;
 
-import net.minecraft.client.gui.components.StateSwitchingButton;
+import net.minecraft.client.gui.components.ImageButton;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import org.spongepowered.asm.mixin.Mixin;
@@ -14,8 +14,8 @@ public interface RecipeBookPageAccessor {
     List<RecipeButton> getButtons();
 
     @Accessor
-    StateSwitchingButton getForwardButton();
+    ImageButton getForwardButton();
 
     @Accessor
-    StateSwitchingButton getBackButton();
+    ImageButton getBackButton();
 }

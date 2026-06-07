@@ -2,7 +2,7 @@ package dev.isxander.controlify.gui.screen;
 
 import dev.isxander.controlify.Controlify;
 import dev.isxander.controlify.api.ControlifyApi;
-import dev.isxander.controlify.config.GlobalSettings;
+import dev.isxander.controlify.config.settings.GlobalSettings;
 import dev.isxander.controlify.controller.ControllerEntity;
 import dev.isxander.controlify.driver.steamdeck.SteamDeckUtil;
 import dev.isxander.controlify.reacharound.ReachAroundMode;
@@ -13,26 +13,24 @@ import dev.isxander.controlify.utils.DebugDump;
 import dev.isxander.yacl3.api.*;
 import dev.isxander.yacl3.api.controller.*;
 import net.minecraft.ChatFormatting;
-import net.minecraft.Util;
+import net.minecraft.util.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 import java.util.concurrent.atomic.AtomicReference;
 
 public class GlobalSettingsScreenFactory {
     public static Screen createGlobalSettingsScreen(Screen parent) {
-        var globalSettings = Controlify.instance().config().globalSettings();
+        var globalSettings = Controlify.instance().config().getSettings().globalSettings();
         AtomicReference<ListOption<String>> whitelist = new AtomicReference<>();
-
-        boolean is12106OrLater = /*? if >=1.21.6 {*/ true /*?} else {*/ /*false *//*?}*/;;
 
         return YetAnotherConfigLib.createBuilder()
                 .title(Component.translatable("controlify.gui.global_settings.title"))
-                .save(() -> Controlify.instance().config().save())
+                .save(() -> Controlify.instance().config().saveSafely())
                 .category(ConfigCategory.createBuilder()
                         .name(Component.translatable("controlify.gui.global_settings.title"))
                         .option(ButtonOption.createBuilder()
@@ -50,7 +48,7 @@ public class GlobalSettingsScreenFactory {
                                                 .text(state == ReachAroundMode.EVERYWHERE ? Component.translatable("controlify.gui.reach_around.tooltip.warning").withStyle(ChatFormatting.RED) : Component.empty())
                                                 .text(ServerPolicies.REACH_AROUND.getPolicy() == ServerPolicy.DISALLOWED ? Component.translatable("controlify.gui.server_controlled").withStyle(ChatFormatting.GOLD) : Component.empty())
                                                 .build())
-                                        .binding(GlobalSettings.DEFAULT.reachAround, () -> globalSettings.reachAround, v -> globalSettings.reachAround = v)
+                                        .binding(GlobalSettings.defaults().reachAround, () -> globalSettings.reachAround, v -> globalSettings.reachAround = v)
                                         .controller(opt -> EnumControllerBuilder.create(opt)
                                                 .enumClass(ReachAroundMode.class)
                                                 .formatValue(mode -> switch (ServerPolicies.REACH_AROUND.getPolicy()) {
@@ -64,7 +62,7 @@ public class GlobalSettingsScreenFactory {
                                         .description(OptionDescription.createBuilder()
                                                 .text(Component.translatable("controlify.gui.allow_server_rumble.tooltip"))
                                                 .build())
-                                        .binding(GlobalSettings.DEFAULT.allowServerRumble, () -> globalSettings.allowServerRumble, v -> globalSettings.allowServerRumble = v)
+                                        .binding(GlobalSettings.defaults().allowServerRumble, () -> globalSettings.allowServerRumble, v -> globalSettings.allowServerRumble = v)
                                         .controller(TickBoxControllerBuilder::create)
                                         .addListener((opt, val) -> {
                                             ControlifyApi.get().getCurrentController()
@@ -77,7 +75,7 @@ public class GlobalSettingsScreenFactory {
                                         .description(OptionDescription.createBuilder()
                                                 .text(Component.translatable("controlify.gui.keyboard_movement.tooltip"))
                                                 .build())
-                                        .binding(GlobalSettings.DEFAULT.alwaysKeyboardMovement, () -> globalSettings.alwaysKeyboardMovement, v -> globalSettings.alwaysKeyboardMovement = v)
+                                        .binding(GlobalSettings.defaults().alwaysKeyboardMovement, () -> globalSettings.alwaysKeyboardMovement, v -> globalSettings.alwaysKeyboardMovement = v)
                                         .controller(TickBoxControllerBuilder::create)
                                         .build())
                                 .option(ButtonOption.createBuilder()
@@ -100,7 +98,7 @@ public class GlobalSettingsScreenFactory {
                                     .description(OptionDescription.createBuilder()
                                             .text(Component.translatable("controlify.gui.keyboard_movement_whitelist.tooltip"))
                                             .build())
-                                    .binding(GlobalSettings.DEFAULT.keyboardMovementWhitelist, () -> globalSettings.keyboardMovementWhitelist, v -> globalSettings.keyboardMovementWhitelist = v)
+                                    .binding(GlobalSettings.defaults().keyboardMovementWhitelist, () -> globalSettings.keyboardMovementWhitelist, v -> globalSettings.keyboardMovementWhitelist = v)
                                     .controller(StringControllerBuilder::create)
                                     .initial("Server IP here")
                                     .build();
@@ -112,23 +110,23 @@ public class GlobalSettingsScreenFactory {
                                 .option(Option.<Float>createBuilder()
                                         .name(Component.translatable("controlify.gui.ingame_button_guide_scale"))
                                         .description(val  -> OptionDescription.createBuilder()
-                                                .text(is12106OrLater ? Component.literal("This setting is currently broken on 1.21.6+").withStyle(ChatFormatting.RED) : Component.empty())
+                                                .text(Component.literal("This setting is currently broken on 1.21.6+").withStyle(ChatFormatting.RED))
                                                 .text(Component.translatable("controlify.gui.ingame_button_guide_scale.tooltip"))
                                                 .text(val != 1f ? Component.translatable("controlify.gui.ingame_button_guide_scale.tooltip.warning").withStyle(ChatFormatting.RED) : Component.empty())
                                                 .build())
-                                        .binding(GlobalSettings.DEFAULT.ingameButtonGuideScale, () -> is12106OrLater ? 1f : globalSettings.ingameButtonGuideScale, v -> globalSettings.ingameButtonGuideScale = v)
+                                        .binding(GlobalSettings.defaults().ingameButtonGuideScale, () -> 1f, v -> globalSettings.ingameButtonGuideScale = v)
                                         .controller(opt -> FloatSliderControllerBuilder.create(opt)
                                                 .range(0.5f, 1.5f)
                                                 .step(0.05f)
                                                 .formatValue(v -> Component.literal(String.format("%.0f%%", v*100))))
-                                        .available(!is12106OrLater)
+                                        .available(false)
                                         .build())
                                 .option(Option.<Boolean>createBuilder()
                                         .name(Component.translatable("controlify.gui.ui_sounds"))
                                         .description(OptionDescription.createBuilder()
                                                 .text(Component.translatable("controlify.gui.ui_sounds.tooltip"))
                                                 .build())
-                                        .binding(GlobalSettings.DEFAULT.extraUiSounds, () -> globalSettings.extraUiSounds, v -> globalSettings.extraUiSounds = v)
+                                        .binding(GlobalSettings.defaults().extraUiSounds, () -> globalSettings.extraUiSounds, v -> globalSettings.extraUiSounds = v)
                                         .controller(TickBoxControllerBuilder::create)
                                         .build())
                                 .option(Option.<Boolean>createBuilder()
@@ -136,7 +134,7 @@ public class GlobalSettingsScreenFactory {
                                         .description(OptionDescription.createBuilder()
                                                 .text(Component.translatable("controlify.gui.out_of_focus_input.tooltip"))
                                                 .build())
-                                        .binding(GlobalSettings.DEFAULT.outOfFocusInput, () -> globalSettings.outOfFocusInput, v -> globalSettings.outOfFocusInput = v)
+                                        .binding(GlobalSettings.defaults().outOfFocusInput, () -> globalSettings.outOfFocusInput, v -> globalSettings.outOfFocusInput = v)
                                         .controller(TickBoxControllerBuilder::create)
                                         .build())
                                 .option(Option.<Boolean>createBuilder()
@@ -144,7 +142,13 @@ public class GlobalSettingsScreenFactory {
                                         .description(OptionDescription.createBuilder()
                                                 .text(Component.translatable("controlify.gui.notify_low_battery.tooltip"))
                                                 .build())
-                                        .binding(GlobalSettings.DEFAULT.notifyLowBattery, () -> globalSettings.notifyLowBattery, v -> globalSettings.notifyLowBattery = v)
+                                        .binding(GlobalSettings.defaults().notifyLowBattery, () -> globalSettings.notifyLowBattery, v -> globalSettings.notifyLowBattery = v)
+                                        .controller(TickBoxControllerBuilder::create)
+                                        .build())
+                                .option(Option.<Boolean>createBuilder()
+                                        .name(Component.translatable("controlify.gui.mixed_input"))
+                                        .description(OptionDescription.of(Component.translatable("controlify.gui.mixed_input.tooltip")))
+                                        .binding(GlobalSettings.defaults().mixedInput, () -> globalSettings.mixedInput, v -> globalSettings.mixedInput = v)
                                         .controller(TickBoxControllerBuilder::create)
                                         .build())
                                 .optionIf(SteamDeckUtil.IS_STEAM_DECK, Option.<Boolean>createBuilder()
@@ -152,7 +156,7 @@ public class GlobalSettingsScreenFactory {
                                         .description(OptionDescription.createBuilder()
                                                 .text(Component.translatable("controlify.gui.use_enhanced_steam_deck_driver.tooltip"))
                                                 .build())
-                                        .binding(GlobalSettings.DEFAULT.useEnhancedSteamDeckDriver, () -> globalSettings.useEnhancedSteamDeckDriver, v -> globalSettings.useEnhancedSteamDeckDriver = v)
+                                        .binding(GlobalSettings.defaults().useEnhancedSteamDeckDriver, () -> globalSettings.useEnhancedSteamDeckDriver, v -> globalSettings.useEnhancedSteamDeckDriver = v)
                                         .controller(TickBoxControllerBuilder::create)
                                         .flag(OptionFlag.GAME_RESTART)
                                         .build())
@@ -178,7 +182,7 @@ public class GlobalSettingsScreenFactory {
                 .build().generateScreen(parent);
     }
 
-    private static ResourceLocation screenshot(String filename) {
+    private static Identifier screenshot(String filename) {
         return CUtil.rl("textures/screenshots/" + filename);
     }
 }

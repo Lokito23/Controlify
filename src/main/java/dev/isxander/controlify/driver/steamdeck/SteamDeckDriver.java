@@ -125,7 +125,6 @@ public class SteamDeckDriver implements Driver {
         ControllerState deckState = deck.getControllerState();
 
         boolean focused = deck.isGameInFocus();
-        Minecraft.getInstance().setWindowActive(focused);
 
         state.setButton(GamepadInputs.NORTH_BUTTON, deckState.getButtonState(ControllerButton.Y) && focused);
         state.setButton(GamepadInputs.EAST_BUTTON, deckState.getButtonState(ControllerButton.B) && focused);
@@ -223,7 +222,7 @@ public class SteamDeckDriver implements Driver {
     }
 
     public static Optional<SteamDeckDriver> create(ControlifyLogger logger) {
-        if (triedToLoad || !Controlify.instance().config().globalSettings().useEnhancedSteamDeckDriver)
+        if (triedToLoad || !Controlify.instance().config().getSettings().globalSettings().useEnhancedSteamDeckDriver)
             return Optional.empty();
 
         triedToLoad = true;

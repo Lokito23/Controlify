@@ -1,5 +1,6 @@
 package dev.isxander.controlify.screenop;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.isxander.controlify.Controlify;
 import dev.isxander.controlify.InputMode;
 import dev.isxander.controlify.bindings.ControlifyBindings;
@@ -16,17 +17,18 @@ import dev.isxander.controlify.sound.ControlifyClientSounds;
 import dev.isxander.controlify.utils.HoldRepeatHelper;
 import dev.isxander.controlify.virtualmouse.VirtualMouseBehaviour;
 import dev.isxander.controlify.virtualmouse.VirtualMouseHandler;
+import net.minecraft.client.InputType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ComponentPath;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.components.tabs.Tab;
 import net.minecraft.client.gui.components.tabs.TabNavigationBar;
 import net.minecraft.client.gui.navigation.FocusNavigationEvent;
 import net.minecraft.client.gui.navigation.ScreenDirection;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
@@ -34,6 +36,7 @@ import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.*;
+import java.util.function.Supplier;
 
 public class ScreenProcessor<T extends Screen> {
     public final T screen;
@@ -68,7 +71,7 @@ public class ScreenProcessor<T extends Screen> {
         eventListeners.forEach(listener -> listener.onControllerInput(controller));
     }
 
-    public void render(ControllerEntity controller, GuiGraphics graphics, float tickDelta) {
+    public void render(ControllerEntity controller, GuiGraphicsExtractor graphics, float tickDelta) {
         var vmouse = Controlify.instance().virtualMouseHandler();
         this.render(controller, graphics, tickDelta, vmouse.isVirtualMouseEnabled() ? Optional.of(vmouse) : Optional.empty());
     }
@@ -85,19 +88,18 @@ public class ScreenProcessor<T extends Screen> {
             }
             case CONTROLLER, MIXED -> {
                 if (!Controlify.instance().virtualMouseHandler().isVirtualMouseEnabled()) {
-                    setInitialFocus();
+                    ((ScreenAccessor) screen).invokeSetInitialFocus();
                 }
             }
         }
     }
 
     protected void handleComponentNavigation(ControllerEntity controller) {
-        if (screen.getFocused() == null)
-            setInitialFocus();
+        if (screen.getFocused() == null) {
+            ((ScreenAccessor) screen).invokeSetInitialFocus();
+        }
 
         var focuses = List.copyOf(getFocusTree());
-
-        var accessor = (ScreenAccessor) screen;
 
         boolean repeatEventAvailable = holdRepeatHelper.canNavigate();
 
@@ -110,59 +112,56 @@ public class ScreenProcessor<T extends Screen> {
         InputBinding guiNaviUp = ControlifyBindings.GUI_NAVI_UP.on(controller);
         InputBinding guiNaviDown = ControlifyBindings.GUI_NAVI_DOWN.on(controller);
 
-        FocusNavigationEvent.ArrowNavigation event = null;
+        Supplier<Boolean> navigationFunc = null;
         if (guiNaviRight.digitalNow() && (repeatEventAvailable || !guiNaviRight.digitalPrev())) {
-            event = accessor.invokeCreateArrowEvent(ScreenDirection.RIGHT);
+            navigationFunc = this.createScreenNavigationFunc(ScreenDirection.RIGHT);
 
             if (!guiNaviRight.digitalPrev())
                 holdRepeatHelper.reset();
         } else if (guiNaviLeft.digitalNow() && (repeatEventAvailable || !guiNaviLeft.digitalPrev())) {
-            event = accessor.invokeCreateArrowEvent(ScreenDirection.LEFT);
+            navigationFunc = this.createScreenNavigationFunc(ScreenDirection.LEFT);
 
             if (!guiNaviLeft.digitalPrev())
                 holdRepeatHelper.reset();
         } else if (guiNaviUp.digitalNow() && (repeatEventAvailable || !guiNaviUp.digitalPrev())) {
-            event = accessor.invokeCreateArrowEvent(ScreenDirection.UP);
+            navigationFunc = this.createScreenNavigationFunc(ScreenDirection.UP);
 
             if (!guiNaviUp.digitalPrev())
                 holdRepeatHelper.reset();
         } else if (guiNaviDown.digitalNow() && (repeatEventAvailable || !guiNaviDown.digitalPrev())) {
-            event = accessor.invokeCreateArrowEvent(ScreenDirection.DOWN);
+            navigationFunc = this.createScreenNavigationFunc(ScreenDirection.DOWN);
 
             if (!guiNaviDown.digitalPrev())
                 holdRepeatHelper.reset();
         } else if (state.isButtonDown(GamepadInputs.DPAD_RIGHT_BUTTON) && (repeatEventAvailable || !prevState.isButtonDown(GamepadInputs.DPAD_RIGHT_BUTTON))) {
-            event = accessor.invokeCreateArrowEvent(ScreenDirection.RIGHT);
+            navigationFunc = this.createScreenNavigationFunc(ScreenDirection.RIGHT);
 
             if (!prevState.isButtonDown(GamepadInputs.DPAD_RIGHT_BUTTON))
                 holdRepeatHelper.reset();
         } else if (state.isButtonDown(GamepadInputs.DPAD_LEFT_BUTTON) && (repeatEventAvailable || !prevState.isButtonDown(GamepadInputs.DPAD_LEFT_BUTTON))) {
-            event = accessor.invokeCreateArrowEvent(ScreenDirection.LEFT);
+            navigationFunc = this.createScreenNavigationFunc(ScreenDirection.LEFT);
 
             if (!prevState.isButtonDown(GamepadInputs.DPAD_LEFT_BUTTON))
                 holdRepeatHelper.reset();
         } else if (state.isButtonDown(GamepadInputs.DPAD_UP_BUTTON) && (repeatEventAvailable || !prevState.isButtonDown(GamepadInputs.DPAD_UP_BUTTON))) {
-            event = accessor.invokeCreateArrowEvent(ScreenDirection.UP);
+            navigationFunc = this.createScreenNavigationFunc(ScreenDirection.UP);
 
             if (!prevState.isButtonDown(GamepadInputs.DPAD_UP_BUTTON))
                 holdRepeatHelper.reset();
         } else if (state.isButtonDown(GamepadInputs.DPAD_DOWN_BUTTON) && (repeatEventAvailable || !prevState.isButtonDown(GamepadInputs.DPAD_DOWN_BUTTON))) {
-            event = accessor.invokeCreateArrowEvent(ScreenDirection.DOWN);
+            navigationFunc = this.createScreenNavigationFunc(ScreenDirection.DOWN);
 
             if (!prevState.isButtonDown(GamepadInputs.DPAD_DOWN_BUTTON))
                 holdRepeatHelper.reset();
         }
 
-        if (event != null) {
-            ComponentPath path = screen.nextFocusPath(event);
-            if (path != null) {
-                accessor.invokeChangeFocus(path);
-
+        if (navigationFunc != null) {
+            if (navigationFunc.get()) {
                 holdRepeatHelper.onNavigate();
 
                 controller.input().ifPresent(InputComponent::notifyGuiPressOutputsOfNavigate);
 
-                if (Controlify.instance().config().globalSettings().extraUiSounds) {
+                if (Controlify.instance().config().getSettings().globalSettings().extraUiSounds) {
                     playFocusChangeSound();
                 }
                 controller.hdHaptics().ifPresent(haptics -> haptics.playHaptic(HapticEffects.NAVIGATE));
@@ -175,6 +174,19 @@ public class ScreenProcessor<T extends Screen> {
         }
     }
 
+    protected @Nullable Supplier<Boolean> createScreenNavigationFunc(ScreenDirection direction) {
+        var event = new FocusNavigationEvent.ArrowNavigation(direction);
+        var path = screen.nextFocusPath(event);
+        if (path == null) {
+            return null;
+        }
+
+        return () -> {
+            ((ScreenAccessor) screen).invokeChangeFocus(path);
+            return true;
+        };
+    }
+
     protected void handleButtons(ControllerEntity controller) {
         boolean vmouseEnabled = Controlify.instance().virtualMouseHandler().isVirtualMouseEnabled();
         InputComponent input = controller.input().orElseThrow();
@@ -183,11 +195,7 @@ public class ScreenProcessor<T extends Screen> {
 
         if (ControlifyBindings.GUI_PRESS.on(controller).guiPressed().get() || (vmouseEnabled && touchpadPressed && !prevTouchpadPressed)) {
             if (!this.tryOpenKeyboard(controller, screen.getFocused())) {
-                //? if >=1.21.9 {
-                screen.keyPressed(new net.minecraft.client.input.KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0));
-                //?} else {
-                /*screen.keyPressed(GLFW.GLFW_KEY_ENTER, 0, 0);
-                *///?}
+                screen.keyPressed(new KeyEvent(InputConstants.KEY_RETURN, 0, 0));
             }
         }
         if (screen.shouldCloseOnEsc() && ControlifyBindings.GUI_BACK.on(controller).guiPressed().get()) {
@@ -197,7 +205,7 @@ public class ScreenProcessor<T extends Screen> {
     }
 
     protected void handleScreenVMouse(ControllerEntity controller, VirtualMouseHandler vmouse) {
-
+        Minecraft.getInstance().setLastInputType(InputType.MOUSE);
     }
 
     protected boolean handleComponentButtonOverride(ControllerEntity controller) {
@@ -250,30 +258,23 @@ public class ScreenProcessor<T extends Screen> {
     }
 
     public void onWidgetRebuild() {
-        setInitialFocus();
+        if (Controlify.instance().currentInputMode().isController() && !Controlify.instance().virtualMouseHandler().isVirtualMouseEnabled()) {
+            // setting this input type causes the vanilla screen to call setInitialFocus
+            // doing it again would cause the second widget to be focused instead of the first
+            minecraft.setLastInputType(InputType.KEYBOARD_ARROW);
+        }
     }
 
     public void onVirtualMouseToggled(boolean enabled) {
         if (enabled) {
             ((ScreenAccessor) screen).invokeClearFocus();
         } else {
-            setInitialFocus();
+            ((ScreenAccessor) screen).invokeSetInitialFocus();
         }
     }
 
-    protected void render(ControllerEntity controller, GuiGraphics graphics, float tickDelta, Optional<VirtualMouseHandler> vmouse) {
+    protected void render(ControllerEntity controller, GuiGraphicsExtractor graphics, float tickDelta, Optional<VirtualMouseHandler> vmouse) {
 
-    }
-
-    protected void setInitialFocus() {
-        if (screen.getFocused() == null && Controlify.instance().currentInputMode().isController() && !Controlify.instance().virtualMouseHandler().isVirtualMouseEnabled()) {
-            var accessor = (ScreenAccessor) screen;
-            ComponentPath path = screen.nextFocusPath(accessor.invokeCreateArrowEvent(ScreenDirection.DOWN));
-            if (path != null) {
-                accessor.invokeChangeFocus(path);
-                holdRepeatHelper.clearDelay();
-            }
-        }
     }
 
     public VirtualMouseBehaviour virtualMouseBehaviour() {
@@ -301,7 +302,7 @@ public class ScreenProcessor<T extends Screen> {
                     InputTarget inputTarget,
                     KeyboardOverlayScreen.KeyboardPositioner positioner
             ) -> {
-                if (controller.genericConfig().config().showOnScreenKeyboard) {
+                if (controller.settings().generic.keyboard.showOnScreenKeyboard) {
                     minecraft.setScreen(new KeyboardOverlayScreen(screen, layout, inputTarget, positioner));
                 }
                 return true;

@@ -18,14 +18,14 @@ import dev.isxander.controlify.screenop.ScreenProcessorProvider;
 import dev.isxander.controlify.api.event.ControlifyEvents;
 import dev.isxander.controlify.mixins.feature.virtualmouse.MouseHandlerAccessor;
 import dev.isxander.controlify.utils.*;
-import dev.isxander.controlify.utils.render.Blit;
-import dev.isxander.controlify.utils.render.CGuiPose;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenAxis;
 import net.minecraft.client.gui.navigation.ScreenDirection;
+import net.minecraft.client.input.MouseButtonInfo;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import org.joml.*;
 import org.lwjgl.glfw.GLFW;
@@ -34,7 +34,7 @@ import java.lang.Math;
 import java.util.*;
 
 public class VirtualMouseHandler {
-    private static final ResourceLocation CURSOR_TEXTURE = CUtil.rl("textures/gui/virtual_mouse.png");
+    private static final Identifier CURSOR_TEXTURE = CUtil.rl("textures/gui/virtual_mouse.png");
 
     private double targetX, targetY;
     private double currentX, currentY;
@@ -123,10 +123,10 @@ public class VirtualMouseHandler {
                 snapToClosestPoint();
         }
 
-        var sensitivity = input.config().config().virtualMouseSensitivity;
+        var sensitivity = input.settings().sensitivity.virtualMouseSensitivity;
 
 
-        if (!input.confObj().isLCE) {
+        if (!input.settings().sensitivity.isLCE) {
             float windowSizeModifier = Math.max(minecraft.getWindow().getWidth(), minecraft.getWindow().getHeight()) / 800f;
 
             targetX += impulse.x * 20f * sensitivity * windowSizeModifier;
@@ -140,9 +140,6 @@ public class VirtualMouseHandler {
         }
         targetX = Mth.clamp(targetX, 0, minecraft.getWindow().getWidth());
         targetY = Mth.clamp(targetY, 0, minecraft.getWindow().getHeight());
-
-        scrollY += ControlifyBindings.VMOUSE_SCROLL_UP.on(controller).analogueNow()
-                - ControlifyBindings.VMOUSE_SCROLL_DOWN.on(controller).analogueNow();
 
         if (holdRepeatHelper.shouldAction(ControlifyBindings.VMOUSE_SNAP_UP.on(controller))) {
             snapInDirection(ScreenDirection.UP);
@@ -158,8 +155,13 @@ public class VirtualMouseHandler {
             holdRepeatHelper.onNavigate();
         }
 
-        if (ScreenProcessorProvider.provide(minecraft.screen).virtualMouseBehaviour().isDefaultOr(VirtualMouseBehaviour.ENABLED)) {
+        VirtualMouseBehaviour vmouseBehaviour = ScreenProcessorProvider.provide(minecraft.screen)
+                .virtualMouseBehaviour();
+        if (vmouseBehaviour.isDefaultOr(VirtualMouseBehaviour.ENABLED)) {
             handleCompatibilityBinds(controller);
+            handleScroll(controller);
+        } else if (vmouseBehaviour.isDefaultOr(VirtualMouseBehaviour.CURSOR_SCROLL)) {
+            handleScroll(controller);
         }
 
         if (ControlifyBindings.GUI_BACK.on(controller).justPressed() && minecraft.screen != null) {
@@ -169,11 +171,7 @@ public class VirtualMouseHandler {
     }
 
     public void handleCompatibilityBinds(ControllerEntity controller) {
-        //? if >=1.21.9 {
         var windowHandle = minecraft.getWindow().handle();
-        //?} else {
-        /*var windowHandle = minecraft.getWindow().getWindow();
-        *///?}
 
 //        Optional<TouchpadComponent> touchpad = controller.touchpad();
 //        List<TouchpadState.Finger> touchpadState = touchpad.map(TouchpadComponent::fingersNow).orElse(List.of());
@@ -197,34 +195,26 @@ public class VirtualMouseHandler {
 
         if (ControlifyBindings.VMOUSE_SHIFT_CLICK.on(controller).justPressed()) {
             this.simulateMousePress(InputConstants.MOUSE_BUTTON_LEFT, InputConstants.PRESS, GLFW.GLFW_MOD_SHIFT);
-        } else if (ControlifyBindings.VMOUSE_SHIFT_CLICK.on(controller).justReleased()) {
             this.simulateMousePress(InputConstants.MOUSE_BUTTON_LEFT, InputConstants.RELEASE, GLFW.GLFW_MOD_SHIFT);
         }
     }
 
+    public void handleScroll(ControllerEntity controller) {
+        scrollY += ControlifyBindings.VMOUSE_SCROLL_UP.on(controller).analogueNow()
+                   - ControlifyBindings.VMOUSE_SCROLL_DOWN.on(controller).analogueNow();
+    }
+
     private void simulateMousePress(int button, int action, int modifiers) {
         var mouseHandler = (MouseHandlerAccessor) minecraft.mouseHandler;
-        //? if >=1.21.9 {
         var windowHandle = minecraft.getWindow().handle();
-        mouseHandler.invokeOnButton(windowHandle, new net.minecraft.client.input.MouseButtonInfo(button, modifiers), action);
-        //?} else {
-        /*var windowHandle = minecraft.getWindow().getWindow();
-        mouseHandler.invokeOnPress(windowHandle, button, action, modifiers);
-        *///?}
+        mouseHandler.invokeOnButton(windowHandle, new MouseButtonInfo(button, modifiers), action);
     }
 
     public void updateMouse() {
         if (!virtualMouseEnabled) return;
-        //? if >=1.21.2 {
         float delta = minecraft.getDeltaTracker().getRealtimeDeltaTicks();
-        //?} else {
-        /*float delta = minecraft.getTimer().getRealtimeDeltaTicks();
-        *///?}
-        //? if >=1.21.9 {
+
         var windowHandle = minecraft.getWindow().handle();
-        //?} else {
-        /*var windowHandle = minecraft.getWindow().getWindow();
-         *///?}
 
         if (Math.round(targetX * 100) / 100.0 != Math.round(currentX * 100) / 100.0 || Math.round(targetY * 100) / 100.0 != Math.round(currentY * 100) / 100.0) {
             currentX = Mth.lerp(delta, currentX, targetX);
@@ -337,20 +327,12 @@ public class VirtualMouseHandler {
         targetX = currentX = snapPoint.position().x() / scaleFactor.x();
         targetY = currentY = snapPoint.position().y() / scaleFactor.y();
 
-        //? if >=1.21.9 {
         var windowHandle = minecraft.getWindow().handle();
-        //?} else {
-        /*var windowHandle = minecraft.getWindow().getWindow();
-         *///?}
         ((MouseHandlerAccessor) minecraft.mouseHandler).invokeOnMove(windowHandle, currentX, currentY);
     }
 
     public void onScreenChanged() {
-        //? if >=1.21.9 {
         var windowHandle = minecraft.getWindow().handle();
-        //?} else {
-        /*var windowHandle = minecraft.getWindow().getWindow();
-         *///?}
 
         if (minecraft.screen != null) {
             if (requiresVirtualMouse()) {
@@ -377,7 +359,7 @@ public class VirtualMouseHandler {
         }
     }
 
-    public void renderVirtualMouse(GuiGraphics graphics) {
+    public void renderVirtualMouse(GuiGraphicsExtractor graphics) {
         if (!virtualMouseEnabled) return;
 
         if (DebugProperties.DEBUG_SNAPPING) {
@@ -390,24 +372,27 @@ public class VirtualMouseHandler {
         var scaledX = currentX * (double)this.minecraft.getWindow().getGuiScaledWidth() / (double)this.minecraft.getWindow().getScreenWidth();
         var scaledY = currentY * (double)this.minecraft.getWindow().getGuiScaledHeight() / (double)this.minecraft.getWindow().getScreenHeight();
 
-        var pose = CGuiPose.ofPush(graphics);
+        var pose = graphics.pose().pushMatrix();
         pose.translate((float) scaledX, (float) scaledY);
-        pose.nextLayer(1000f);
+        graphics.nextStratum();
         pose.scale(0.5f, 0.5f);
 
-        Blit.tex(graphics, CURSOR_TEXTURE, -16, -16, 0, 0, 32, 32, 32, 32);
+        graphics.blit(
+                RenderPipelines.GUI_TEXTURED,
+                CURSOR_TEXTURE,
+                -16, -16,
+                0, 0,
+                32, 32,
+                32, 32
+        );
 
-        pose.pop();
+        pose.popMatrix();
     }
 
     public void enableVirtualMouse() {
         if (virtualMouseEnabled) return;
 
-        //? if >=1.21.9 {
         var windowHandle = minecraft.getWindow().handle();
-        //?} else {
-        /*var windowHandle = minecraft.getWindow().getWindow();
-         *///?}
 
         GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
         virtualMouseEnabled = true;
@@ -430,11 +415,7 @@ public class VirtualMouseHandler {
     public void disableVirtualMouse() {
         if (!virtualMouseEnabled) return;
 
-        //? if >=1.21.9 {
         var windowHandle = minecraft.getWindow().handle();
-        //?} else {
-        /*var windowHandle = minecraft.getWindow().getWindow();
-         *///?}
 
         // make sure minecraft doesn't think the mouse is grabbed when it isn't
         ((MouseHandlerAccessor) minecraft.mouseHandler).setMouseGrabbed(false);
@@ -454,11 +435,7 @@ public class VirtualMouseHandler {
 
     private void setMousePosition() {
         GLFW.glfwSetCursorPos(
-                //? if >=1.21.9 {
                 minecraft.getWindow().handle(),
-                //?} else {
-                /*minecraft.getWindow().getWindow(),
-                *///?}
                 targetX,
                 targetY
         );
@@ -470,8 +447,13 @@ public class VirtualMouseHandler {
 
         if (isController && hasScreen) {
             return switch (ScreenProcessorProvider.provide(minecraft.screen).virtualMouseBehaviour()) {
-                case DEFAULT -> Controlify.instance().config().globalSettings().virtualMouseScreens.stream().anyMatch(s -> s.isAssignableFrom(minecraft.screen.getClass()));
-                case ENABLED, CURSOR_ONLY -> true;
+                case DEFAULT -> Controlify.instance().config()
+                        .getSettings()
+                        .globalSettings()
+                        .virtualMouseScreens
+                        .stream()
+                        .anyMatch(s -> s.isAssignableFrom(minecraft.screen.getClass()));
+                case ENABLED, CURSOR_ONLY, CURSOR_SCROLL -> true;
                 case DISABLED -> false;
             };
         }
@@ -491,7 +473,7 @@ public class VirtualMouseHandler {
             return;
         }
 
-        var screens = Controlify.instance().config().globalSettings().virtualMouseScreens;
+        var screens = Controlify.instance().config().getSettings().globalSettings().virtualMouseScreens;
         var screenClass = minecraft.screen.getClass();
         if (screens.contains(screenClass)) {
             screens.remove(screenClass);
@@ -514,7 +496,7 @@ public class VirtualMouseHandler {
             );
         }
 
-        Controlify.instance().config().save();
+        Controlify.instance().config().saveSafely();
     }
 
     public boolean isVirtualMouseEnabled() {

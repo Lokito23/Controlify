@@ -7,19 +7,20 @@ import dev.isxander.controlify.controller.ControllerEntity;
 import dev.isxander.controlify.screenop.ComponentProcessor;
 import dev.isxander.controlify.screenop.ScreenProcessor;
 import dev.isxander.controlify.utils.HoldRepeatHelper;
-import dev.isxander.controlify.utils.render.Blit;
 import net.minecraft.client.gui.ComponentPath;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.events.ContainerEventHandler;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.navigation.FocusNavigationEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.NonNull;
 
 import java.util.*;
 import java.util.function.Predicate;
@@ -32,8 +33,8 @@ import java.util.function.Predicate;
  * state between keys.
  */
 public class KeyboardWidget extends AbstractWidget implements ContainerEventHandler, ComponentProcessor {
-    private ResourceLocation currentLayout;
-    private @Nullable ResourceLocation previousLayout;
+    private Identifier currentLayout;
+    private @Nullable Identifier previousLayout;
 
     private InputTarget inputConsumer;
 
@@ -54,7 +55,7 @@ public class KeyboardWidget extends AbstractWidget implements ContainerEventHand
     }
 
     public void updateLayout(KeyboardLayoutWithId layout) {
-        ResourceLocation oldLayoutId = this.getCurrentLayoutId();
+        Identifier oldLayoutId = this.getCurrentLayoutId();
         @Nullable String oldIdentifier = Optional.ofNullable(getFocused())
                 .map(k -> k.getKey().identifier())
                 .orElse(null);
@@ -62,7 +63,7 @@ public class KeyboardWidget extends AbstractWidget implements ContainerEventHand
         this.updateLayout(layout, oldIdentifier, oldLayoutId);
     }
 
-    public void updateLayout(KeyboardLayoutWithId layout, @Nullable String identifierToFocus, @Nullable ResourceLocation oldLayoutChangerToFocus) {
+    public void updateLayout(KeyboardLayoutWithId layout, @Nullable String identifierToFocus, @Nullable Identifier oldLayoutChangerToFocus) {
         this.previousLayout = this.currentLayout;
         this.currentLayout = layout.id();
 
@@ -115,36 +116,34 @@ public class KeyboardWidget extends AbstractWidget implements ContainerEventHand
     }
 
     @Override
-    protected void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    protected void extractWidgetRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
         for (KeyWidget key : keys) {
             // vanilla widget render does other stuff like mouse hover update etc
             // render method of keys are empty - this doesn't actually do any rendering
-            key.render(guiGraphics, mouseX, mouseY, partialTick);
+            key.extractRenderState(graphics, mouseX, mouseY, a);
         }
 
         // draw in a managed context so we can batch render calls
         // everything within here is rendered in a single draw call
-        Blit.batchDraw(guiGraphics, () -> {
-            guiGraphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0x80000000);
-            guiGraphics./*? if >=1.21.9 {*/submitOutline/*?} else {*//*renderOutline*//*?}*/(getX(), getY(), getWidth(), getHeight(), 0xFFAAAAAA);
+        graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0x80000000);
+        graphics.outline(getX(), getY(), getWidth(), getHeight(), 0xFFAAAAAA);
 
-            for (KeyWidget key : keys) {
-                // every key background is rendered into the same vertex buffer to upload at once
-                key.renderKeyBackground(guiGraphics, mouseX, mouseY, partialTick);
-            }
+        for (KeyWidget key : keys) {
+            // every key background is rendered into the same vertex buffer to upload at once
+            key.extractKeyBackground(graphics, mouseX, mouseY, a);
+        }
 
-            // renders all foreground after background to prevent context switching
-            for (KeyWidget key : keys) {
-                // text rendering is batched by default in managed mode
-                key.renderKeyForeground(guiGraphics, mouseX, mouseY, partialTick);
-            }
-        });
+        // renders all foreground after background to prevent context switching
+        for (KeyWidget key : keys) {
+            // text rendering is batched by default in managed mode
+            key.extractKeyForeground(graphics, mouseX, mouseY, a);
+        }
     }
 
     @Override
     public boolean overrideControllerButtons(ScreenProcessor<?> screen, ControllerEntity controller) {
         InputTarget inputTarget = this.getInputTarget();
-        var config = controller.genericConfig().config();
+        var settings = controller.settings().generic;
 
         if (inputTarget.supportsCursorMovement()) {
             if (this.fwdCursorHelper.shouldAction(ControlifyBindings.GUI_NEXT_TAB.on(controller))) {
@@ -153,9 +152,9 @@ public class KeyboardWidget extends AbstractWidget implements ContainerEventHand
                     this.fwdCursorHelper.onNavigate();
                     this.bwdCursorHelper.reset();
 
-                    if (config.hintKeyboardCursor && config.showScreenGuides) {
-                        config.hintKeyboardCursor = false;
-                        Controlify.instance().config().save();
+                    if (settings.keyboard.hintCursor && settings.guide.showScreenGuides) {
+                        settings.keyboard.hintCursor = false;
+                        Controlify.instance().config().saveSafely();
                     }
 
                     return true;
@@ -167,9 +166,9 @@ public class KeyboardWidget extends AbstractWidget implements ContainerEventHand
                     this.bwdCursorHelper.onNavigate();
                     this.fwdCursorHelper.reset();
 
-                    if (config.hintKeyboardCursor && config.showScreenGuides) {
-                        config.hintKeyboardCursor = false;
-                        Controlify.instance().config().save();
+                    if (settings.keyboard.hintCursor && settings.guide.showScreenGuides) {
+                        settings.keyboard.hintCursor = false;
+                        Controlify.instance().config().saveSafely();
                     }
 
                     return true;
@@ -207,11 +206,11 @@ public class KeyboardWidget extends AbstractWidget implements ContainerEventHand
         return inputConsumer;
     }
 
-    public ResourceLocation getCurrentLayoutId() {
+    public Identifier getCurrentLayoutId() {
         return this.currentLayout;
     }
 
-    public Optional<ResourceLocation> getPreviousLayoutId() {
+    public Optional<Identifier> getPreviousLayoutId() {
         return Optional.ofNullable(this.previousLayout);
     }
 
@@ -278,37 +277,22 @@ public class KeyboardWidget extends AbstractWidget implements ContainerEventHand
 
     @Nullable
     @Override
-    public ComponentPath nextFocusPath(FocusNavigationEvent event) {
+    public ComponentPath nextFocusPath(@NonNull FocusNavigationEvent event) {
         return ContainerEventHandler.super.nextFocusPath(event);
     }
 
-    //? if >=1.21.9 {
     @Override
-    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent mouseButtonEvent, boolean doubleClick) {
+    public boolean mouseClicked(@NonNull MouseButtonEvent mouseButtonEvent, boolean doubleClick) {
         return ContainerEventHandler.super.mouseClicked(mouseButtonEvent, doubleClick);
     }
     @Override
-    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent mouseButtonEvent) {
+    public boolean mouseReleased(@NonNull MouseButtonEvent mouseButtonEvent) {
         return ContainerEventHandler.super.mouseReleased(mouseButtonEvent);
     }
     @Override
-    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent mouseButtonEvent, double dx, double dy) {
+    public boolean mouseDragged(@NonNull MouseButtonEvent mouseButtonEvent, double dx, double dy) {
         return ContainerEventHandler.super.mouseDragged(mouseButtonEvent, dx, dy);
     }
-    //?} else {
-    /*@Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        return ContainerEventHandler.super.mouseClicked(mouseX, mouseY, button);
-    }
-    @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        return ContainerEventHandler.super.mouseReleased(mouseX, mouseY, button);
-    }
-    @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        return ContainerEventHandler.super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
-    }
-    *///?}
 
     @Override
     public boolean isFocused() {

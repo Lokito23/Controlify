@@ -1,6 +1,6 @@
 package dev.isxander.controlify.mixins.feature.virtualmouse.snapping;
 
-import net.minecraft.client.gui.components.StateSwitchingButton;
+import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookTabButton;
@@ -21,5 +21,5 @@ public interface RecipeBookComponentAccessor {
     RecipeBookTabButton getSelectedTab();
 
     @Accessor
-    StateSwitchingButton getFilterButton();
+    CycleButton<?> getFilterButton();
 }

@@ -17,9 +17,6 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 @Mixin(ChatComponent.class)
 public abstract class ChatComponentMixin {
     @Shadow
-    public abstract double getScale();
-
-    @Shadow
     @Final
     private Minecraft minecraft;
 
@@ -28,14 +25,20 @@ public abstract class ChatComponentMixin {
 
     @Definition(id = "floor", method = "Lnet/minecraft/util/Mth;floor(F)I")
     @Expression("floor((float) (@(?) - 40) / ?)")
-    @ModifyExpressionValue(method = "render", at = @At("MIXINEXTRAS:EXPRESSION"))
+    @ModifyExpressionValue(
+            method = "extractRenderState(Lnet/minecraft/client/gui/components/ChatComponent$ChatGraphicsAccess;IILnet/minecraft/client/gui/components/ChatComponent$DisplayMode;)V",
+            at = @At("MIXINEXTRAS:EXPRESSION")
+    )
     private int modifyChatOffset(int y) {
         if (minecraft.screen instanceof ChatScreen chat)
             return (int) (y * (1 - ChatKeyboardDucky.getKeyboardShiftAmount(chat)));
         return y;
     }
 
-    @ModifyExpressionValue(method = "render", at = @At(value = "CONSTANT", args = "intValue=" + VANILLA_CHAT_PADDING))
+    @ModifyExpressionValue(
+            method = "extractRenderState(Lnet/minecraft/client/gui/components/ChatComponent$ChatGraphicsAccess;IILnet/minecraft/client/gui/components/ChatComponent$DisplayMode;)V",
+            at = @At(value = "CONSTANT", args = "intValue=" + VANILLA_CHAT_PADDING)
+    )
     private int modifyChatToInputPadding(int padding) {
         if (minecraft.screen instanceof ChatScreen chat) {
             if (ChatKeyboardDucky.getKeyboardShiftAmount(chat) > 0) {
@@ -43,17 +46,5 @@ public abstract class ChatComponentMixin {
             }
         }
         return padding;
-    }
-
-    @ModifyVariable(method = "screenToChatY", at = @At("HEAD"), argsOnly = true)
-    private double modifyScreenY(double y) {
-        if (minecraft.screen instanceof ChatScreen chat) {
-            float shiftAmount = ChatKeyboardDucky.getKeyboardShiftAmount(chat);
-            if (shiftAmount > 0) {
-                double shiftPixels = shiftAmount * minecraft.getWindow().getGuiScaledHeight() - (VANILLA_CHAT_PADDING - SHIFTED_CHAT_PADDING);
-                return y + shiftPixels;
-            }
-        }
-        return y;
     }
 }

@@ -1,4 +1,3 @@
-//? if >=1.21.2 {
 package dev.isxander.controlify.screenop.compat.vanilla;
 
 import dev.isxander.controlify.Controlify;
@@ -32,7 +31,7 @@ public class BundleItemSlotControllerAction {
             if (right) offsetX++;
 
             if (offsetX != 0 || offsetY != 0) {
-                int currentIndex = BundleItem.getSelectedItem(stack);
+                int currentIndex = BundleItem.getSelectedItemIndex(stack);
 
                 if (currentIndex == -1) {
                     consumer.accept(stack, hoveredSlotIndex, 0);
@@ -72,4 +71,3 @@ public class BundleItemSlotControllerAction {
         void accept(ItemStack stack, int hoveredSlot, int selectedIndex);
     }
 }
-//?}

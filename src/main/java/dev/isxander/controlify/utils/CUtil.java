@@ -5,8 +5,8 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.serialization.*;
 import dev.isxander.controlify.utils.log.ControlifyLogger;
-import net.minecraft.Util;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Util;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.util.StringRepresentable;
 import org.apache.commons.codec.binary.Hex;
@@ -27,8 +27,8 @@ import java.util.stream.Stream;
 public class CUtil {
     public static final ControlifyLogger LOGGER = ControlifyLogger.createMasterLogger(LoggerFactory.getLogger("Controlify"));
     
-    public static ResourceLocation rl(String path) {
-        return ResourceLocation.fromNamespaceAndPath("controlify", path);
+    public static Identifier rl(String path) {
+        return Identifier.fromNamespaceAndPath("controlify", path);
     }
 
     public static BufferBuilder beginBuffer(VertexFormat.Mode mode, VertexFormat format) {
@@ -173,15 +173,5 @@ public class CUtil {
         return Mth.clampedMap(value, Short.MIN_VALUE, 0, -1f, 0f)
                + Mth.clampedMap(value, 0, Short.MAX_VALUE, 0f, 1f);
     }
-
-    //? if >=1.21.9 {
-    public static net.minecraft.network.chat.FontDescription createResourceFont(ResourceLocation resource) {
-        return new net.minecraft.network.chat.FontDescription.Resource(resource);
-    }
-    //?} else {
-    /*public static ResourceLocation createResourceFont(ResourceLocation resource) {
-        return resource;
-    }
-    *///?}
 
 }

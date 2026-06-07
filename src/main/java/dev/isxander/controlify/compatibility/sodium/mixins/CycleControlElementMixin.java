@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Unique;
 
 @Mixin(targets = "net.caffeinemc.mods.sodium.client.gui.options.control.CyclingControl$CyclingControlElement")
 public abstract class CycleControlElementMixin implements ComponentProcessorProvider {
-    @Shadow public abstract void cycleControl(boolean reverse);
+    @Shadow protected abstract void cycleControl(boolean reverse);
 
     @Unique private final ComponentProcessor controlify$componentProcessor
             = new CycleControlProcessor(this::cycleControl);

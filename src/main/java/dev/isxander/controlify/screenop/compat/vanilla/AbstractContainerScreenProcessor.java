@@ -15,12 +15,13 @@ import dev.isxander.controlify.virtualmouse.VirtualMouseBehaviour;
 import dev.isxander.controlify.virtualmouse.VirtualMouseHandler;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.world.inventory.ClickType;
+
 import net.minecraft.world.inventory.Slot;
 
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import net.minecraft.world.inventory.ContainerInput;
 
 public class AbstractContainerScreenProcessor<T extends AbstractContainerScreen<?>> extends ScreenProcessor<T> {
 
@@ -53,7 +54,18 @@ public class AbstractContainerScreenProcessor<T extends AbstractContainerScreen<
     protected void handleScreenVMouse(ControllerEntity controller, VirtualMouseHandler vmouse) {
         var accessor = (AbstractContainerScreenAccessor) screen;
 
-        var ctx = new ContainerCtx(hoveredSlot.get(), screen.getMenu().getCarried(), accessor.invokeHasClickedOutside(vmouse.getCurrentX(1f), vmouse.getCurrentY(1f), accessor.getLeftPos(), accessor.getTopPos() /*? if <1.21.9 >>*/ /*,0*/ ), controller, controller.genericConfig().config().guideVerbosity);
+        var ctx = new ContainerCtx(
+                hoveredSlot.get(),
+                screen.getMenu().getCarried(),
+                accessor.invokeHasClickedOutside(
+                        vmouse.getCurrentX(1f),
+                        vmouse.getCurrentY(1f),
+                        accessor.getLeftPos(),
+                        accessor.getTopPos()
+                ),
+                controller,
+                controller.settings().generic.guide.verbosity
+        );
         GuideDomains.CONTAINER.updateGuides(ctx, minecraft.font);
 
         Slot hoveredSlot = this.hoveredSlot.get();
@@ -65,22 +77,22 @@ public class AbstractContainerScreenProcessor<T extends AbstractContainerScreen<
             }
 
             if (ControlifyBindings.INV_SELECT.on(controller).justPressed()) {
-                clickSlotFunction.clickSlot(hoveredSlot, hoveredSlot.index, 0, ClickType.PICKUP);
+                clickSlotFunction.clickSlot(hoveredSlot, hoveredSlot.index, 0, ContainerInput.PICKUP);
                 hapticNavigate();
             }
 
             if (ControlifyBindings.INV_QUICK_MOVE.on(controller).justPressed()) {
-                clickSlotFunction.clickSlot(hoveredSlot, hoveredSlot.index, 0, ClickType.QUICK_MOVE);
+                clickSlotFunction.clickSlot(hoveredSlot, hoveredSlot.index, 0, ContainerInput.QUICK_MOVE);
                 hapticNavigate();
             }
 
             if (ControlifyBindings.INV_TAKE_HALF.on(controller).justPressed()) {
-                clickSlotFunction.clickSlot(hoveredSlot, hoveredSlot.index, 1, ClickType.PICKUP);
+                clickSlotFunction.clickSlot(hoveredSlot, hoveredSlot.index, 1, ContainerInput.PICKUP);
                 hapticNavigate();
             }
 
 //            if (ControlifyBindings.SWAP_HANDS.on(controller).justPressed()) {
-//                clickSlotFunction.clickSlot(hoveredSlot, hoveredSlot.index, 40, ClickType.SWAP);
+//                clickSlotFunction.clickSlot(hoveredSlot, hoveredSlot.index, 40, ContainerInput.SWAP);
 //                hapticNavigate();
 //            }
         } else {
@@ -89,7 +101,7 @@ public class AbstractContainerScreenProcessor<T extends AbstractContainerScreen<
 
         if (!screen.getMenu().getCarried().isEmpty()) {
             if (ControlifyBindings.DROP_INVENTORY.on(controller).justPressed()) {
-                clickSlotFunction.clickSlot(null, -999, 0, ClickType.PICKUP);
+                clickSlotFunction.clickSlot(null, -999, 0, ContainerInput.PICKUP);
                 hapticNavigate();
             }
         }
@@ -108,7 +120,7 @@ public class AbstractContainerScreenProcessor<T extends AbstractContainerScreen<
     }
 
     private void setRenderGuide(boolean render) {
-        render &= ControlifyApi.get().getCurrentController().map(c -> c.genericConfig().config().showScreenGuides).orElse(false);
+        render &= ControlifyApi.get().getCurrentController().map(c -> c.settings().generic.guide.showScreenGuides).orElse(false);
 
         List<Renderable> renderables = ((ScreenAccessor) screen).getRenderables();
 
@@ -133,11 +145,16 @@ public class AbstractContainerScreenProcessor<T extends AbstractContainerScreen<
 
     @Override
     public VirtualMouseBehaviour virtualMouseBehaviour() {
-        return VirtualMouseBehaviour.CURSOR_ONLY;
+        return VirtualMouseBehaviour.CURSOR_SCROLL;
     }
 
     @FunctionalInterface
     public interface ClickSlotFunction {
-        void clickSlot(Slot slot, int slotId, int button, ClickType clickType);
+        void clickSlot(
+                Slot slot,
+                int slotId,
+                int button,
+                ContainerInput containerInput
+        );
     }
 }

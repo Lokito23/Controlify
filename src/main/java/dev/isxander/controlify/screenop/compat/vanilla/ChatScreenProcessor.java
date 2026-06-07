@@ -12,7 +12,7 @@ import dev.isxander.controlify.screenop.ScreenProcessor;
 import dev.isxander.controlify.utils.HoldRepeatHelper;
 import dev.isxander.controlify.utils.LazyComponentDims;
 import dev.isxander.controlify.virtualmouse.VirtualMouseHandler;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.network.chat.Component;
@@ -88,20 +88,20 @@ public class ChatScreenProcessor extends ScreenProcessor<ChatScreen> {
     }
 
     @Override
-    protected void render(ControllerEntity controller, GuiGraphics graphics, float tickDelta, Optional<VirtualMouseHandler> vmouse) {
-        var config = controller.genericConfig().config();
+    protected void render(ControllerEntity controller, GuiGraphicsExtractor graphics, float tickDelta, Optional<VirtualMouseHandler> vmouse) {
+        var settings = controller.settings().generic;
 
-        if (this.keyboardSupplier.get() != null && config.showScreenGuides) {
-            if (config.hintKeyboardCursor) {
+        if (this.keyboardSupplier.get() != null && settings.guide.showScreenGuides) {
+            if (settings.keyboard.hintCursor) {
                 LazyComponentDims hint = CommonKeyboardHints.TEXT_CURSOR;
 
                 int x = this.inputSupplier.get().getRight() - hint.getWidth() - 2;
                 int y = this.inputSupplier.get().getY() - hint.getHeight();
 
-                graphics.drawString(minecraft.font, hint.getComponent(), x, y, 0xFFFFFFFF, true);
+                graphics.text(minecraft.font, hint.getComponent(), x, y, 0xFFFFFFFF, true);
             }
 
-            if (config.hintKeyboardCommandSuggester) {
+            if (settings.keyboard.hintCommandSuggester) {
                 CmdSuggestionsController suggestionsController = this.suggestionsController.get();
 
                 if (suggestionsController != null && suggestionsController.controlify$hasAvailableSuggestions()) {
@@ -110,7 +110,7 @@ public class ChatScreenProcessor extends ScreenProcessor<ChatScreen> {
                     int x = this.screen.width - hint.getWidth() - 2;
                     int y = 2 + Math.max(0, hint.getHeight() - minecraft.font.lineHeight);
 
-                    graphics.drawString(minecraft.font, hint.getComponent(), x, y, 0xFFFFFFFF, true);
+                    graphics.text(minecraft.font, hint.getComponent(), x, y, 0xFFFFFFFF, true);
                 }
             }
         }
@@ -129,10 +129,10 @@ public class ChatScreenProcessor extends ScreenProcessor<ChatScreen> {
     }
 
     private void clearCommandSuggesterHint(ControllerEntity controller) {
-        var config = controller.genericConfig().config();
-        if (config.hintKeyboardCommandSuggester && config.showScreenGuides) {
-            config.hintKeyboardCommandSuggester = false;
-            Controlify.instance().config().save();
+        var settings = controller.settings().generic;
+        if (settings.keyboard.hintCommandSuggester && settings.guide.showScreenGuides) {
+            settings.keyboard.hintCommandSuggester = false;
+            Controlify.instance().config().saveSafely();
         }
     }
 

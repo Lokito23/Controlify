@@ -9,7 +9,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.Items;
 
@@ -75,12 +75,12 @@ public final class ControlifyBindings {
             .id("controlify", "jump")
             .category(MOVEMENT_CATEGORY)
             .allowedContexts(BindContext.IN_GAME)
-            .radialCandidate(RadialIcons.getEffect(/*? if >=1.21.5 {*/ MobEffects.JUMP_BOOST /*?} else {*/ /*MobEffects.JUMP *//*?}*/)));
+            .radialCandidate(RadialIcons.getEffect(MobEffects.JUMP_BOOST)));
     public static final InputBindingSupplier SPRINT = ControlifyBindApi.get().registerBinding(builder -> builder
             .id("controlify", "sprint")
             .category(MOVEMENT_CATEGORY)
             .allowedContexts(BindContext.IN_GAME)
-            .keyEmulation(options.keySprint, c -> c.genericConfig().config().toggleSprint));
+            .keyEmulation(options.keySprint, c -> c.settings().generic.toggleSprint));
     public static final InputBindingSupplier SNEAK =  ControlifyBindApi.get().registerBinding(builder -> builder
             .id("controlify", "sneak")
             .category(MOVEMENT_CATEGORY)
@@ -402,13 +402,13 @@ public final class ControlifyBindings {
                         .replaceAll("[^a-z0-9/._-]", "_")
                         .trim();
 
-                var identifier = ResourceLocation.fromNamespaceAndPath("fabric-key-binding-api-v1", idPath);
+                var identifier = Identifier.fromNamespaceAndPath("fabric-key-binding-api-v1", idPath);
 
                 InputBindingSupplier binding = ControlifyBindApi.get().registerBinding(builder -> builder
                         .id(identifier)
                         .name(Component.translatable(keyMapping.getName()))
                         .description(Component.translatable("controlify.custom_binding.vanilla_description").withStyle(ChatFormatting.GRAY))
-                        .category(/*? if >=1.21.9 {*/ keyMapping.getCategory().label() /*?} else {*/ /*Component.translatable(keyMapping.getCategory()) *//*?}*/)
+                        .category(keyMapping.getCategory().label())
                         .radialCandidate(RadialIcons.getModLoaderIcon())
                         .allowedContexts(BindContext.IN_GAME)
                         .keyEmulation(keyMapping));

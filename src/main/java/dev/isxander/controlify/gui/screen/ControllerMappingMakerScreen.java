@@ -1,6 +1,7 @@
 package dev.isxander.controlify.gui.screen;
 
 import dev.isxander.controlify.Controlify;
+import dev.isxander.controlify.config.settings.device.DeviceSettings;
 import dev.isxander.controlify.controller.ControllerEntity;
 import dev.isxander.controlify.controller.input.*;
 import dev.isxander.controlify.controller.input.mapping.MapType;
@@ -10,16 +11,16 @@ import dev.isxander.controlify.screenop.ScreenControllerEventListener;
 import dev.isxander.controlify.screenop.ScreenProcessor;
 import dev.isxander.controlify.screenop.ScreenProcessorProvider;
 import dev.isxander.controlify.utils.CUtil;
-import dev.isxander.controlify.utils.ClientUtils;
+import dev.isxander.controlify.utils.render.RenderUtils;
 import dev.isxander.controlify.utils.ColorUtils;
-import dev.isxander.controlify.utils.render.Blit;
-import dev.isxander.controlify.utils.render.CGuiPose;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
+import org.jspecify.annotations.NonNull;
 
 import java.util.List;
 
@@ -37,8 +38,8 @@ public class ControllerMappingMakerScreen extends Screen implements ScreenContro
             new MappingStage(GamepadInputs.NORTH_BUTTON, MapType.BUTTON, button("face_up"), "face_up", "faceview"),
             new MappingStage(GamepadInputs.LEFT_SHOULDER_BUTTON, MapType.BUTTON, button("left_bumper"), "left_bumper", "triggerview"),
             new MappingStage(GamepadInputs.RIGHT_SHOULDER_BUTTON, MapType.BUTTON, button("right_bumper"), "right_bumper", "triggerview"),
-            new MappingStage(GamepadInputs.START_BUTTON, MapType.BUTTON, button("left_special"), "left_special", "faceview"),
-            new MappingStage(GamepadInputs.GUIDE_BUTTON, MapType.BUTTON, button("right_special"), "right_special", "faceview"),
+            new MappingStage(GamepadInputs.BACK_BUTTON, MapType.BUTTON, button("left_special"), "left_special", "faceview"),
+            new MappingStage(GamepadInputs.START_BUTTON, MapType.BUTTON, button("right_special"), "right_special", "faceview"),
             new MappingStage(GamepadInputs.LEFT_STICK_BUTTON, MapType.BUTTON, button("left_stick_down"), "left_stick_press", "faceview"),
             new MappingStage(GamepadInputs.RIGHT_STICK_BUTTON, MapType.BUTTON, button("right_stick_down"), "right_stick_press", "faceview"),
             new MappingStage(GamepadInputs.DPAD_UP_BUTTON, MapType.BUTTON, button("dpad_up"), "dpad_up", "faceview"),
@@ -71,7 +72,9 @@ public class ControllerMappingMakerScreen extends Screen implements ScreenContro
         mappingBuilder.putDeadzoneGroups(deadzoneGroups);
 
         // otherwise we will be mapping something that is already mapped
-        inputComponent.confObj().mapping = null;
+        DeviceSettings deviceSettings = Controlify.instance().config().getSettings()
+                .getOrCreateDeviceSettings(inputComponent.getController().uid());
+        deviceSettings.mapping = null;
     }
 
     public static ControllerMappingMakerScreen createGamepadMapping(InputComponent inputComponent, Screen lastScreen) {
@@ -136,7 +139,7 @@ public class ControllerMappingMakerScreen extends Screen implements ScreenContro
     }
 
     private void processStage(MappingStage stage, ControllerStateView stateNow, ControllerStateView stateThen) {
-        for (ResourceLocation button : stateNow.getButtons()) {
+        for (Identifier button : stateNow.getButtons()) {
             boolean now = stateNow.isButtonDown(button);
             boolean prev = stateThen.isButtonDown(button);
 
@@ -156,7 +159,7 @@ public class ControllerMappingMakerScreen extends Screen implements ScreenContro
             }
         }
 
-        for (ResourceLocation axis : stateNow.getAxes()) {
+        for (Identifier axis : stateNow.getAxes()) {
             float now = stateNow.getAxisState(axis);
             float prev = stateThen.getAxisState(axis);
             float diff = prev - now;
@@ -173,7 +176,7 @@ public class ControllerMappingMakerScreen extends Screen implements ScreenContro
             }
         }
 
-        for (ResourceLocation hat : stateNow.getHats()) {
+        for (Identifier hat : stateNow.getHats()) {
             HatState now = stateNow.getHatState(hat);
             HatState prev = stateThen.getHatState(hat);
             if (now != prev) {
@@ -209,8 +212,10 @@ public class ControllerMappingMakerScreen extends Screen implements ScreenContro
     @Override
     public void onClose() {
         minecraft.setScreen(lastScreen);
-        inputComponent.confObj().mapping = mappingBuilder.build();
-        Controlify.instance().config().save();
+        DeviceSettings deviceSettings = Controlify.instance().config().getSettings()
+                .getOrCreateDeviceSettings(inputComponent.getController().uid());
+        deviceSettings.mapping = mappingBuilder.build();
+        Controlify.instance().config().saveSafely();
     }
 
     private void goBackStage() {
@@ -224,12 +229,12 @@ public class ControllerMappingMakerScreen extends Screen implements ScreenContro
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int i, int j, float f) {
-        super.render(guiGraphics, i, j, f);
+    public void extractRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        super.extractRenderState(graphics, mouseX, mouseY, a);
 
-        guiGraphics.drawCenteredString(font, Component.translatable("controlify.gui.mapping_maker.title"), width / 2, 15, 0xFFFFFFFF);
+        graphics.centeredText(font, Component.translatable("controlify.gui.mapping_maker.title"), width / 2, 15, 0xFFFFFFFF);
 
-        guiGraphics.drawCenteredString(
+        graphics.centeredText(
                 font,
                 currentStage == null ? Component.translatable("controlify.gui.mapping_maker.please_wait") : currentStage.name(),
                 width / 2, height - 20,
@@ -239,7 +244,8 @@ public class ControllerMappingMakerScreen extends Screen implements ScreenContro
         int safeZone = Math.min(width, height) - 30;
         float scale = safeZone / 32f;
 
-        var pose = CGuiPose.ofPush(guiGraphics);
+        var pose = graphics.pose();
+        pose.pushMatrix();
         pose.translate(width / 2f, -5);
         pose.translate(-32 * scale / 2f, 0);
         pose.scale(scale, scale);
@@ -247,34 +253,37 @@ public class ControllerMappingMakerScreen extends Screen implements ScreenContro
         float colour = currentStage != null && currentStage.isSatisfied() ? 0.46f : 1f;
 
         if (currentStage != null && currentStage.background() != null) {
-            Blit.tex(
-                    guiGraphics,
-                    currentStage.background(),
+            Identifier texture = currentStage.background();
+            int color = ColorUtils.grey(colour, 1f);
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED,
+                    texture,
                     0, 0,
-                    0, 0,
+                    (float) 0, (float) 0,
                     32, 32,
                     32, 32,
-                    ColorUtils.grey(colour, 1f)
+                    color
             );
         }
 
         if (currentStage == null || !currentStage.isSatisfied()) {
-            ResourceLocation texture = currentStage != null ? currentStage.foreground() : CUtil.rl("textures/gui/controllerdiagram/faceview.png");
-            Blit.tex(
-                    guiGraphics,
+            Identifier texture = currentStage != null ? currentStage.foreground() : CUtil.rl("textures/gui/controllerdiagram/faceview.png");
+            int color = ColorUtils.grey(colour, 1f);
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED,
                     texture,
                     0, 0,
-                    0, 0,
+                    (float) 0, (float) 0,
                     32, 32,
                     32, 32,
-                    ColorUtils.grey(colour, 1f)
+                    color
             );
         }
 
-        pose.pop();
+        pose.popMatrix();
 
         float progress = currentStage != null ? (float) (stages.indexOf(currentStage) + 1) / stages.size() : 0;
-        ClientUtils.drawBar(guiGraphics, width / 2, height - 30, progress);
+        RenderUtils.extractBar(graphics, width / 2, height - 30, progress);
     }
 
     private static Component button(String buttonName) {
@@ -293,14 +302,14 @@ public class ControllerMappingMakerScreen extends Screen implements ScreenContro
     }
 
     public static class MappingStage {
-        private final ResourceLocation originInput;
+        private final Identifier originInput;
         private final MapType outputType;
         private final Component name;
-        private final ResourceLocation foreground;
-        private final ResourceLocation background;
+        private final Identifier foreground;
+        private final Identifier background;
         private boolean satisfied;
 
-        public MappingStage(ResourceLocation originInput, MapType outputType, Component name, String foreground, String background) {
+        public MappingStage(Identifier originInput, MapType outputType, Component name, String foreground, String background) {
             this.originInput = originInput;
             this.outputType = outputType;
             this.name = name;
@@ -308,7 +317,7 @@ public class ControllerMappingMakerScreen extends Screen implements ScreenContro
             this.background = CUtil.rl("textures/gui/controllerdiagram/" + foreground + ".png");;
         }
 
-        public ResourceLocation originInput() {
+        public Identifier originInput() {
             return originInput;
         }
 
@@ -320,11 +329,11 @@ public class ControllerMappingMakerScreen extends Screen implements ScreenContro
             return name;
         }
 
-        public ResourceLocation foreground() {
+        public Identifier foreground() {
             return foreground;
         }
 
-        public ResourceLocation background() {
+        public Identifier background() {
             return background;
         }
 

@@ -5,18 +5,17 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
 import dev.isxander.controlify.api.bind.InputBinding;
-import dev.isxander.controlify.api.guide.Fact;
-import dev.isxander.controlify.api.guide.FactCtx;
-import dev.isxander.controlify.api.guide.GuideDomainRegistry;
-import dev.isxander.controlify.api.guide.Rule;
-import dev.isxander.controlify.api.guide.ActionLocation;
+import dev.isxander.controlify.api.guide.*;
 import dev.isxander.controlify.controller.ControllerEntity;
 import dev.isxander.controlify.font.BindingFontHelper;
 import dev.isxander.controlify.platform.client.resource.SimpleControlifyReloadListener;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.FileToIdConverter;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import org.apache.commons.lang3.Validate;
@@ -27,15 +26,15 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
-public class GuideDomain<T extends FactCtx> implements GuideDomainRegistry<T>, SimpleControlifyReloadListener<GuideDomain.Preparations> {
+public class GuideDomain<T extends FactCtx> implements RenderableGuideDomain<T>, SimpleControlifyReloadListener<GuideDomain.Preparations> {
     public static final String DIRECTORY = "guides";
     private static final FileToIdConverter converter = FileToIdConverter.json(DIRECTORY);
 
     /** The unique identifier of this domain */
-    private final ResourceLocation id;
+    private final Identifier id;
 
     /** Facts registered via code */
-    private final Map<ResourceLocation, Fact<T>> facts = new HashMap<>();
+    private final Map<Identifier, Fact<T>> facts = new HashMap<>();
     /** Registered dynamic rules - rules are dynamic if they were created in-code */
     private final List<Rule> dynamicRules = new ArrayList<>();
     /** Whether facts and dynamic rules registries have been frozen */
@@ -44,14 +43,14 @@ public class GuideDomain<T extends FactCtx> implements GuideDomainRegistry<T>, S
     /** All rules loaded from resource packs as well as dynamic rules */
     private List<Rule> rules;
     /** The facts that need to be resolved each tick based on references */
-    private Map<ResourceLocation, Boolean> resolvedFacts;
+    private Map<Identifier, Boolean> resolvedFacts = Map.of();
 
     private PrecomputedLines leftGuides = PrecomputedLines.EMPTY;
     private PrecomputedLines rightGuides = PrecomputedLines.EMPTY;
     /** True after resource reload since font width/height may be different */
     private boolean precomputeInvalid = false;
 
-    public GuideDomain(ResourceLocation id) {
+    public GuideDomain(Identifier id) {
         this.id = id;
     }
 
@@ -67,8 +66,8 @@ public class GuideDomain<T extends FactCtx> implements GuideDomainRegistry<T>, S
         var leftBuilder = new PrecomputedLines.Builder();
         var rightBuilder = new PrecomputedLines.Builder();
 
-        var leftConsumed = new HashSet<ResourceLocation>(this.leftGuides.lines().size() + 5);
-        var rightConsumed = new HashSet<ResourceLocation>(this.rightGuides.lines().size() + 5);
+        var leftConsumed = new HashSet<Identifier>(this.leftGuides.lines().size() + 5);
+        var rightConsumed = new HashSet<Identifier>(this.rightGuides.lines().size() + 5);
 
         ControllerEntity controller = context.controller();
         
@@ -81,7 +80,7 @@ public class GuideDomain<T extends FactCtx> implements GuideDomainRegistry<T>, S
 
             // get the builder and consumed set based on the rule's location
             PrecomputedLines.Builder builder;
-            Set<ResourceLocation> consumedBinds;
+            Set<Identifier> consumedBinds;
             switch (rule.where()) {
                 case LEFT -> {
                     builder = leftBuilder;
@@ -144,8 +143,8 @@ public class GuideDomain<T extends FactCtx> implements GuideDomainRegistry<T>, S
         Validate.isTrue(this.frozen, "Cannot update fact resolution before the domain has been frozen");
 
         boolean changed = false;
-        for (Map.Entry<ResourceLocation, Boolean> entry : this.resolvedFacts.entrySet()) {
-            ResourceLocation factId = entry.getKey();
+        for (Map.Entry<Identifier, Boolean> entry : this.resolvedFacts.entrySet()) {
+            Identifier factId = entry.getKey();
             Fact<T> fact = this.facts.get(factId); // facts.get should never return null here
 
             boolean newValue = fact.provider().test(context);
@@ -157,7 +156,7 @@ public class GuideDomain<T extends FactCtx> implements GuideDomainRegistry<T>, S
         return changed;
     }
 
-    public ResourceLocation id() {
+    public Identifier id() {
         return this.id;
     }
 
@@ -186,6 +185,21 @@ public class GuideDomain<T extends FactCtx> implements GuideDomainRegistry<T>, S
         Validate.notNull(rule, "Rule cannot be null");
 
         this.dynamicRules.add(rule);
+    }
+
+    @Override
+    public void render(GuiGraphicsExtractor graphics, boolean bottomAligned, boolean textContrast) {
+        GuideRenderer.render(graphics, this, Minecraft.getInstance(), bottomAligned, textContrast);
+    }
+
+    @Override
+    public Renderable renderable(boolean bottomAligned, boolean textContrast) {
+        return new GuideRenderer.Renderable(
+                this,
+                Minecraft.getInstance(),
+                bottomAligned,
+                textContrast
+        );
     }
 
     public boolean freeze() {
@@ -252,7 +266,7 @@ public class GuideDomain<T extends FactCtx> implements GuideDomainRegistry<T>, S
         }, executor);
     }
 
-    private Fact<T> validateFact(ResourceLocation factId) {
+    private Fact<T> validateFact(Identifier factId) {
         Fact<T> fact = this.facts.get(factId);
         Validate.notNull(fact, "Fact %s is not registered in domain %s", factId, this.id);
         this.resolvedFacts.put(factId, false);
@@ -260,7 +274,7 @@ public class GuideDomain<T extends FactCtx> implements GuideDomainRegistry<T>, S
     }
 
     @Override
-    public ResourceLocation getReloadId() {
+    public Identifier getReloadId() {
         return this.id.withPrefix("reload/");
     }
 

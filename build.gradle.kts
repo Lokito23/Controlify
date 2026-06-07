@@ -6,6 +6,7 @@ plugins {
 
     id("me.modmuss50.mod-publish-plugin")
     `maven-publish`
+    id("com.gradleup.nmcp")
 
     id("dev.kikugie.postprocess.j52j") version "2.1-beta.3"
 }
@@ -31,6 +32,7 @@ modstitch {
         if (isPropDefined("deps.reesesSodiumOptions")) configs.register("controlify-compat.reeses-sodium-options")
         configs.register("controlify-compat.yacl")
         if (isPropDefined("deps.simpleVoiceChat")) configs.register("controlify-compat.simple-voice-chat")
+        configs.register("controlify-compat.rrls")
         if (modstitch.isLoom) configs.register("controlify-platform.fabric")
         if (modstitch.isModDevGradleRegular) configs.register("controlify-platform.neoforge")
     }
@@ -39,14 +41,6 @@ modstitch {
 dependencies {
     fun Dependency?.jij() = this?.also(::modstitchJiJ)
     fun Dependency?.productionMod() = this?.also { "productionMods"(it) }
-
-    propMap("deps.mixinExtras") {
-        when {
-            modstitch.isLoom -> modstitchImplementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:$it")!!).jij()
-            modstitch.isModDevGradleRegular -> implementation("io.github.llamalad7:mixinextras-neoforge:$it").jij()
-            else -> error("Unknown loader")
-        }
-    }
 
     fun modDependency(
         id: String,
@@ -100,8 +94,21 @@ dependencies {
     // Already included by YetAnotherConfigLib, but we need it too, so let's define explicit dep
     api("org.quiltmc.parsers:json:${property("deps.quiltparsers")}")
 
+    if (stonecutter.current.parsed < "1.21.11") {
+        compileOnly("org.jspecify:jspecify:1.0.0")
+    }
+
     // sodium compat
-    modDependency("sodium", { "maven.modrinth:sodium:$it" })
+    when {
+        modstitch.isLoom -> {
+            modDependency("sodium", { "net.caffeinemc:sodium-fabric:$it" })
+        }
+        modstitch.isModDevGradle -> {
+            modDependency("sodium", { "net.caffeinemc:sodium-neoforge:$it" })
+            modDependency("sodium", { "net.caffeinemc:sodium-neoforge-mod:$it" })
+        }
+    }
+
     // RSO compat
     modDependency("reesesSodiumOptions", { "maven.modrinth:reeses-sodium-options:$it" })
     // iris compat
@@ -151,7 +158,7 @@ val nativeTargets = listOf(
 val nativeConfigurations = nativeTargets.associate { target ->
     target.configurationName to configurations.create(target.configurationName)
 }
-val nativeHashConfiguration = configurations.create("nativeHashes")
+val nativeHashConfiguration: Configuration = configurations.create("nativeHashes")
 
 nativeTargets.forEach { target ->
     dependencies {
@@ -193,12 +200,7 @@ Include native libraries for SDL3 in the jar.
 
 val releaseModVersion by tasks.registering {
     group = "controlify/versioned"
-
     dependsOn("publishMods")
-
-    if (!project.publishMods.dryRun.get()) {
-        dependsOn("publish")
-    }
 }
 createActiveTask(releaseModVersion)
 
@@ -242,42 +244,40 @@ publishMods {
     // modrinth and curseforge use different formats for snapshots. this can be expressed globally
     val stableMCVersions = versionList("pub.stableMC")
 
-    val modrinthId: String by project
-    if (modrinthId.isNotBlank() && hasProperty("modrinth.token")) {
-        modrinth {
-            projectId.set(modrinthId)
-            accessToken.set(findProperty("modrinth.token")?.toString())
-            minecraftVersions.addAll(stableMCVersions)
-            minecraftVersions.addAll(versionList("pub.modrinthMC"))
+    modrinth {
+        accessToken = secrets.gradleProperty("modrinth.accessToken")
 
-            announcementTitle = "Download $mcVersion for ${loader.replaceFirstChar { it.uppercase() }} from Modrinth"
+        projectId = providers.gradleProperty("pub.modrinthId")
 
-            requires { slug.set("yacl") }
+        minecraftVersions.addAll(stableMCVersions)
+        minecraftVersions.addAll(versionList("pub.modrinthMC"))
 
-            if (modstitch.isLoom) {
-                requires { slug.set("fabric-api") }
-                optional { slug.set("modmenu") }
-            }
+        announcementTitle = "Download $mcVersion for ${loader.replaceFirstChar { it.uppercase() }} from Modrinth"
+
+        requires { slug.set("yacl") }
+
+        if (modstitch.isLoom) {
+            requires { slug.set("fabric-api") }
+            optional { slug.set("modmenu") }
         }
     }
 
-    val curseforgeId: String by project
-    if (curseforgeId.isNotBlank() && hasProperty("curseforge.token")) {
-        curseforge {
-            projectId = curseforgeId
-            projectSlug = findProperty("curseforgeSlug")!!.toString()
-            accessToken = findProperty("curseforge.token")?.toString()
-            minecraftVersions.addAll(stableMCVersions)
-            minecraftVersions.addAll(versionList("pub.curseMC"))
+    curseforge {
+        accessToken = secrets.gradleProperty("curseforge.accessToken")
 
-            announcementTitle = "Download $mcVersion for ${loader.replaceFirstChar { it.uppercase() }} from CurseForge"
+        projectId = providers.gradleProperty("pub.curseforgeId")
+        projectSlug = providers.gradleProperty("pub.curseforgeSlug")
 
-            requires { slug.set("yacl") }
+        minecraftVersions.addAll(stableMCVersions)
+        minecraftVersions.addAll(versionList("pub.curseMC"))
 
-            if (modstitch.isLoom) {
-                requires { slug.set("fabric-api") }
-                optional { slug.set("modmenu") }
-            }
+        announcementTitle = "Download $mcVersion for ${loader.replaceFirstChar { it.uppercase() }} from CurseForge"
+
+        requires { slug.set("yacl") }
+
+        if (modstitch.isLoom) {
+            requires { slug.set("fabric-api") }
+            optional { slug.set("modmenu") }
         }
     }
 }
@@ -288,6 +288,33 @@ publishing {
 
             artifactId = "controlify"
             groupId = "dev.isxander"
+
+            pom {
+                name = modstitch.metadata.modName
+                description = modstitch.metadata.modDescription
+                url = "https://www.isxander.dev/projects/controlify"
+                licenses {
+                    license {
+                        name = "LGPL-3.0-or-later"
+                        url = "https://www.gnu.org/licenses/lgpl-3.0.en.html"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "isXander"
+                        name = "Xander"
+                        email = "business@isxander.dev"
+                    }
+                }
+                scm {
+                    url = "https://github.com/isXander/Controlify"
+                    connection = "scm:git:git//github.com/isXander/Controlify.git"
+                    developerConnection = "scm:git:ssh://git@github.com/isXander/Controlify.git"
+                }
+            }
         }
     }
+}
+signing {
+    sign(publishing.publications["mod"])
 }
